@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: verdant-3d
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      # Password for /admin (memory manager, teaching, backups). If you leave it out, the server generates one and prints it in the log.
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: AUTO_REVISE
+        value: "1"
+      - key: MAX_CONCURRENT_BUILDS
+        value: "2"
+      # Optional: leave AI_MODEL unset so the server auto-picks the best Gemini model your key can use.
+      # Optional safety cap on AI calls per day made with the server's own key (0 = unlimited).
+      - key: AI_DAILY_CAP
+        value: "0"

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdant 3D - Admin</title>
+<style>
+:root{--bg:#0b0f0d;--panel:#121a16;--panel2:#18231d;--line:#25352c;--txt:#e6f1ea;--mut:#8aa397;--acc:#4ade80;--acc2:#22c55e;--warn:#fbbf24;--bad:#f87171}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+a{color:var(--acc)}h1{font-size:18px;margin:0}h2{font-size:15px;margin:0 0 10px}
+header{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+nav{display:flex;gap:6px;flex-wrap:wrap}nav button{background:transparent;border:1px solid var(--line);color:var(--mut);padding:7px 13px;border-radius:8px;cursor:pointer}
+nav button.on{background:var(--acc2);color:#04130a;border-color:var(--acc2);font-weight:600}
+main{padding:18px;max-width:1200px;margin:0 auto}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.stat b{display:block;font-size:22px}.stat span{color:var(--mut);font-size:12px}
+input,select,textarea{background:#0d1511;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px;font:inherit;max-width:100%}
+textarea{width:100%;min-height:90px;resize:vertical}label{display:block;color:var(--mut);font-size:12px;margin:8px 0 3px}
+button.btn{background:var(--acc2);color:#04130a;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
+button.btn.sec{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}button.btn.bad{background:#7f1d1d;color:#fecaca}
+button.btn.sm{padding:4px 9px;font-size:12px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--mut);font-size:12px;font-weight:500}.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;border:1px solid var(--line);color:var(--mut)}
+.tag.g{color:var(--acc);border-color:var(--acc2)}.tag.w{color:var(--warn);border-color:#7a5b10}.tag.b{color:var(--bad);border-color:#7f1d1d}
+.mut{color:var(--mut)}.msg{padding:8px 12px;border-radius:8px;margin:8px 0;background:var(--panel2);border:1px solid var(--line)}.msg.err{color:var(--bad)}.msg.ok{color:var(--acc)}
+#login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50}#login .card{width:340px}
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:12px;max-width:760px;width:94vw;padding:16px}dialog::backdrop{background:#000a}
+canvas{background:#0d1511;border:1px solid var(--line);border-radius:8px;max-width:100%}pre{white-space:pre-wrap;word-break:break-word;background:#0d1511;padding:10px;border-radius:8px;border:1px solid var(--line);max-height:260px;overflow:auto;font-size:12px}
+.hide{display:none!important}
+</style></head><body>
+<div id="login"><div class="card"><h1>Verdant 3D admin</h1><p class="mut">Enter the admin password (the <code>ADMIN_TOKEN</code> env var on Render, or the generated one printed in the server log).</p>
+<input id="pw" type="password" placeholder="Admin password" style="width:100%" autofocus><div class="row" style="margin-top:10px"><button class="btn" onclick="doLogin()">Open</button></div><div id="lmsg" class="msg err hide"></div></div></div>
+<header><h1>Verdant 3D &middot; Admin</h1><nav id="nav"></nav><span class="mut" id="ver"></span><button class="btn sec sm" onclick="logout()">Log out</button></header>
+<main id="main"></main>
+<dialog id="dlg"><div id="dbody"></div><div class="row" style="margin-top:12px"><button class="btn sec" onclick="dlg.close()">Close</button></div></dialog>
+<script>
+const $=s=>document.querySelector(s);let TOKEN=sessionStorage.getItem('vt')||'';let tab='overview';
+const dlg=$('#dlg');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,opt){opt=opt||{};opt.headers=Object.assign({'X-Admin-Token':TOKEN},opt.headers||{});
+  if(opt.json!==undefined){opt.body=JSON.stringify(opt.json);opt.headers['Content-Type']='application/json';delete opt.json}
+  const r=await fetch(path,opt);let d=null;try{d=await r.json()}catch(e){}
+  if(!r.ok){const m=(d&&d.detail)||r.statusText;if(r.status===401){logout(true)}throw new Error(typeof m==='string'?m:JSON.stringify(m))}return d}
+async function doLogin(){TOKEN=$('#pw').value.trim();try{await api('/admin/api/overview');sessionStorage.setItem('vt',TOKEN);$('#login').classList.add('hide');init()}catch(e){const m=$('#lmsg');m.textContent=e.message;m.classList.remove('hide')}}
+$('#pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+function logout(soft){sessionStorage.removeItem('vt');TOKEN='';$('#login').classList.remove('hide');if(!soft)$('#pw').value=''}
+const TABS=[['overview','Overview'],['models','Models'],['teach','Teach'],['backup','Backup'],['ai','AI & keys']];
+function init(){$('#nav').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="${t[0]===tab?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');go(tab)}
+function go(t){tab=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));({overview,models,teach,backup,ai})[t]()}
+function note(el,msg,ok){el.innerHTML=`<div class="msg ${ok?'ok':'err'}">${esc(msg)}</div>`}
+/* ---------- overview ---------- */
+async function overview(){const m=$('#main');m.innerHTML='<p class="mut">Loading...</p>';
+  const o=await api('/admin/api/overview');$('#ver').textContent=o.version;const s=o.stats,c=o.counters;
+  const st=(n,l)=>`<div class="stat"><b>${esc(n)}</b><span>${esc(l)}</span></div>`;
+  m.innerHTML=`<div class="card"><h2>Global memory</h2><div class="grid">${st(s.models,'models saved')}${st(s.classic+' / '+s.depth3d,'Classic / Depth 3D')}${st(s.pinned,'pinned (locked)')}${st(s.flagged,'flagged by users')}${st(s.uses,'times reused')}${st(s.avg_score,'average quality')}${st(s.db_kb+' KB','database size')}</div>
+  ${o.persistent?'':'<div class="msg err">The memory lives on a temporary disk - it is wiped on every redeploy/restart of the free Render plan. Use the Backup tab to download it regularly (or add a Render disk and set MEMORY_DB=/var/data/verdant_memory.db).</div>'}</div>
+  <div class="card"><h2>API usage</h2><div class="grid">${st(o.api_calls_avoided,'AI/search calls avoided')}${st(c.ai_calls||0,'AI calls made (all time)')}${st(o.ai_calls_today+(o.daily_cap?' / '+o.daily_cap:''),'AI calls today (UTC)')}${st(c.memory_hits||0,'answered from memory')}${st(c.local_variants||0,'recoloured locally')}${st(c.revisions_skipped||0,'revisions skipped')}${st(c.second_candidates_skipped||0,'2nd candidates skipped')}${st(c.research_cache_hits||0,'web searches cached')}${st(c.ai_errors||0,'AI errors')}</div></div>
+  <div class="card"><h2>Teaching</h2><div class="grid">${st(s.lessons,'text lessons')}${st(s.examples,'example 3D models')}${st(c.taught_builds||0,'builds that used teaching')}</div></div>
+  <div class="card"><h2>Models by effort / source</h2><p class="mut">${Object.entries(s.by_effort).map(([k,v])=>`<span class="tag">${esc(k)}: ${v}</span>`).join(' ')} &nbsp; ${Object.entries(s.by_source).map(([k,v])=>`<span class="tag g">${esc(k)}: ${v}</span>`).join(' ')}</p>
+  <p class="mut">Providers on the server: ${o.providers.map(p=>`<span class="tag g">${esc(p)}</span>`).join(' ')||'<span class="tag b">none</span>'} ${o.serper?'<span class="tag g">serper</span>':''} &middot; active jobs: ${o.jobs_active}</p></div>`}
+/* ---------- models ---------- */
+let MQ={q:'',sort:'popular',variant:'',source:'',flagged:false,pinned:false,offset:0,limit:25};
+async function models(){const m=$('#main');
+  m.innerHTML=`<div class="card"><div class="row"><input id="q" placeholder="Search prompt / title / notes" value="${esc(MQ.q)}" style="flex:1;min-width:200px">
+  <select id="sort"><option value="popular">Most used</option><option value="new">Newest</option><option value="old">Oldest</option><option value="score">Best quality</option><option value="parts">Most parts</option><option value="flags">Most flagged</option></select>
+  <select id="variant"><option value="">All variants</option><option value="classic">Classic</option><option value="depth3d">Depth 3D</option></select>
+  <select id="source"><option value="">All sources</option><option value="ai">AI</option><option value="local">Local recolour</option><option value="example">Taught example</option></select>
+  <label style="margin:0"><input type="checkbox" id="flagged"> flagged</label><label style="margin:0"><input type="checkbox" id="pinned"> pinned</label>
+  <button class="btn" onclick="mSearch()">Search</button></div></div><div class="card" id="mlist"></div>
+  <div class="card"><h2>Clean up</h2><div class="row"><label style="margin:0">quality below</label><input id="cbelow" type="number" value="75" style="width:70px"><label style="margin:0">never reused & older than (days)</label><input id="cdays" type="number" value="30" style="width:70px"><label style="margin:0"><input type="checkbox" id="cflag" checked> flagged</label>
+  <button class="btn sec" onclick="cleanup(true)">Count</button><button class="btn bad" onclick="cleanup(false)">Delete matches</button><span id="cmsg" class="mut"></span></div><p class="mut">Pinned (locked) models are never touched.</p></div>`;
+  for(const k of ['sort','variant','source'])$('#'+k).value=MQ[k];$('#flagged').checked=MQ.flagged;$('#pinned').checked=MQ.pinned;
+  $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')mSearch()});mLoad()}
+function mSearch(){MQ.q=$('#q').value;MQ.sort=$('#sort').value;MQ.variant=$('#variant').value;MQ.source=$('#source').value;MQ.flagged=$('#flagged').checked;MQ.pinned=$('#pinned').checked;MQ.offset=0;mLoad()}
+async function mLoad(){const L=$('#mlist');L.innerHTML='<p class="mut">Loading...</p>';
+  const p=new URLSearchParams({q:MQ.q,sort:MQ.sort,variant:MQ.variant,source:MQ.source,limit:MQ.limit,offset:MQ.offset,flagged:MQ.flagged,pinned:MQ.pinned});
+  let d;try{d=await api('/admin/api/models?'+p)}catch(e){return note(L,e.message)}
+  const rows=d.items.map(i=>`<tr><td><input type="checkbox" class="sel" value="${esc(i.id)}"></td><td><b>${esc(i.prompt)}</b><div class="mut" style="font-size:12px">${esc(i.title)}${i.notes?' &middot; '+esc(i.notes):''}</div></td>
+  <td><span class="tag">${i.variant==='depth3d'?'Depth 3D':'Classic'}</span> <span class="tag">${esc(i.effort)}</span> ${i.source!=='ai'?`<span class="tag g">${esc(i.source)}</span>`:''}${i.pinned?' <span class="tag w">pinned</span>':''}</td>
+  <td>${i.parts}</td><td>${i.score}</td><td>${i.uses}</td><td>${i.flags?`<span class="tag b">${i.flags}</span>`:'0'}</td>
+  <td class="row"><button class="btn sec sm" onclick="mView('${i.id}')">View</button><button class="btn sec sm" onclick="mPin('${i.id}',${i.pinned?0:1})">${i.pinned?'Unpin':'Pin'}</button><button class="btn bad sm" onclick="mDel('${i.id}')">Delete</button></td></tr>`).join('');
+  const pages=Math.ceil(d.total/MQ.limit),cur=Math.floor(MQ.offset/MQ.limit)+1;
+  L.innerHTML=`<div class="row" style="margin-bottom:8px"><b>${d.total} model(s)</b><span style="flex:1"></span><button class="btn sec sm" onclick="bulk('pin')">Pin selected</button><button class="btn sec sm" onclick="bulk('unflag')">Unflag selected</button><button class="btn bad sm" onclick="bulk('delete')">Delete selected</button></div>
+  <table><tr><th></th><th>Prompt</th><th>Type</th><th>Parts</th><th>Score</th><th>Used</th><th>Flags</th><th></th></tr>${rows||'<tr><td colspan="8" class="mut">Nothing here yet.</td></tr>'}</table>
+  <div class="row" style="margin-top:10px"><button class="btn sec sm" ${cur<=1?'disabled':''} onclick="MQ.offset-=MQ.limit;mLoad()">&larr; Prev</button><span class="mut">page ${cur} / ${pages||1}</span><button class="btn sec sm" ${cur>=pages?'disabled':''} onclick="MQ.offset+=MQ.limit;mLoad()">Next &rarr;</button></div><div id="mm"></div>`}
+function sel(){return [...document.querySelectorAll('.sel:checked')].map(e=>e.value)}
+async function bulk(a){const ids=sel();if(!ids.length)return;if(a==='delete'&&!confirm('Delete '+ids.length+' model(s)?'))return;await api('/admin/api/models/bulk',{method:'POST',json:{ids,action:a}});mLoad()}
+async function mPin(id,v){await api('/admin/api/models/'+id,{method:'PATCH',json:{pinned:v}});mLoad()}
+async function mDel(id){if(!confirm('Delete this model from the global memory?'))return;await api('/admin/api/models/'+id,{method:'DELETE'});mLoad()}
+async function cleanup(dry){const b={below_score:+$('#cbelow').value||0,unused_days:+$('#cdays').value||0,flagged:$('#cflag').checked,dry_run:dry};
+  if(!dry&&!confirm('Delete all models matching these rules?'))return;const r=await api('/admin/api/cleanup',{method:'POST',json:b});$('#cmsg').textContent=(dry?'Would delete ':'Deleted ')+r.matched+' model(s).';if(!dry)mLoad()}
+async function mView(id){const m=await api('/admin/api/models/'+id);const p=m.payload||{};
+  $('#dbody').innerHTML=`<h2>${esc(m.prompt)}</h2><div class="row"><span class="tag">${m.variant}</span><span class="tag">${esc(m.effort)}</span><span class="tag">score ${m.score}</span><span class="tag">${m.parts} parts</span><span class="tag">used ${m.uses}x</span><span class="tag">${esc(m.engine||'')}</span></div>
+  <div class="row" style="margin:10px 0"><canvas id="cv1" width="340" height="300"></canvas><canvas id="cv2" width="340" height="300"></canvas></div>
+  <label>Prompt (changing it changes which requests reuse this model)</label><input id="ep" value="${esc(m.prompt)}" style="width:100%"><label>Title</label><input id="et" value="${esc(m.title)}" style="width:100%"><label>Notes</label><input id="en" value="${esc(m.notes||'')}" style="width:100%">
+  <div class="row" style="margin-top:10px"><button class="btn" onclick="mSave('${id}')">Save changes</button><button class="btn sec" onclick="mTeach('${id}')">Use as teaching example</button></div><div id="dmsg"></div>`;
+  dlg.showModal();draw($('#cv1'),p,0,2);draw($('#cv2'),p,2,1)}
+async function mSave(id){try{await api('/admin/api/models/'+id,{method:'PATCH',json:{prompt:$('#ep').value,title:$('#et').value,notes:$('#en').value}});note($('#dmsg'),'Saved.',1);mLoad()}catch(e){note($('#dmsg'),e.message)}}
+async function mTeach(id){try{const r=await api('/admin/api/models/'+id+'/teach',{method:'POST',json:{}});note($('#dmsg'),'Added as a teaching example ('+r.parts+' parts). Similar prompts will now see it.',1)}catch(e){note($('#dmsg'),e.message)}}
+function hull2d(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);if(pts.length<3)return pts;const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);const lo=[];for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}const up=[];for(const p of pts.slice().reverse()){while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}lo.pop();up.pop();return lo.concat(up)}
+function draw(cv,p,ax,ay){const g=cv.getContext('2d');g.clearRect(0,0,cv.width,cv.height);const shapes=[];
+  if(p.hulls)for(const h of p.hulls){const pts=h.points.map(q=>[h.pos[ax]+q[ax],h.pos[ay]+q[ay]]);shapes.push({c:h.color,poly:hull2d(pts)})}
+  else if(p.ops)for(const o of p.ops){const s=o.size,q=o.pos;const x=[q[ax]-s[ax]/2,q[ax]+s[ax]/2],y=[q[ay]-s[ay]/2,q[ay]+s[ay]/2];shapes.push({c:o.color,poly:[[x[0],y[0]],[x[1],y[0]],[x[1],y[1]],[x[0],y[1]]]})}
+  let a=[1e9,1e9,-1e9,-1e9];shapes.forEach(s=>s.poly.forEach(q=>{a=[Math.min(a[0],q[0]),Math.min(a[1],q[1]),Math.max(a[2],q[0]),Math.max(a[3],q[1])]}));
+  const w=a[2]-a[0]||1,h=a[3]-a[1]||1,k=Math.min((cv.width-30)/w,(cv.height-30)/h);const ox=(cv.width-w*k)/2-a[0]*k,oy=(cv.height+h*k)/2+a[1]*k;
+  shapes.forEach(s=>{g.beginPath();s.poly.forEach((q,i)=>{const X=q[0]*k+ox,Y=oy-q[1]*k;i?g.lineTo(X,Y):g.moveTo(X,Y)});g.closePath();g.fillStyle=s.c;g.globalAlpha=.85;g.fill();g.globalAlpha=1;g.strokeStyle='#0008';g.stroke()});
+  g.fillStyle='#8aa397';g.font='11px sans-serif';g.fillText(ax===0?'front (X/Y)':'side (Z/Y)',8,14)}
+/* ---------- teach ---------- */
+async function teach(){const m=$('#main');
+  m.innerHTML=`<div class="card"><h2>1. Teach with text (lessons)</h2><p class="mut">Short rules the AI must follow. Leave "applies when prompt contains" empty for a rule that always applies, or fill it (e.g. <i>dragon</i>) so it is only added for matching prompts - cheaper and more precise.</p>
+  <label>Lesson</label><textarea id="lt" placeholder="e.g. Dragons have four legs and two wings that start at the shoulder blades, never at the back of the head."></textarea>
+  <div class="row"><div><label>Applies when prompt contains (optional)</label><input id="lk" placeholder="dragon, wyvern"></div><div><label>Category</label><select id="ls"><option value="any">any</option><option>creature</option><option>humanoid</option><option>vehicle</option><option>structure</option><option>prop</option><option>plant</option></select></div>
+  <div><label>Builder</label><select id="lv"><option value="any">both</option><option value="classic">Classic</option><option value="depth3d">Depth 3D</option></select></div></div>
+  <div class="row" style="margin-top:10px"><button class="btn" onclick="addLesson()">Add lesson</button></div><div id="lmsg2"></div><div id="llist" style="margin-top:10px"></div></div>
+  <div class="card"><h2>2. Teach by showing a 3D model (examples)</h2><p class="mut">Upload an <b>OBJ</b>, <b>GLB/GLTF</b> or the builder's <b>JSON</b> export. The server converts it into compact convex parts, uses it as a reference for similar prompts, and (Depth 3D) also saves it as a locked model so that exact prompt costs no AI call. FBX is not supported - export OBJ/GLB from your 3D tool.</p>
+  <div class="row"><div><label>Name</label><input id="en2" placeholder="Gorilla boss"></div><div style="flex:1"><label>Prompt it teaches (matching words)</label><input id="ep2" placeholder="gorilla" style="width:100%"></div>
+  <div><label>Scope</label><select id="es"><option value="subject">only for this subject</option><option value="category">style for the whole category</option></select></div>
+  <div><label>Category</label><select id="ec"><option value="">auto</option><option>creature</option><option>humanoid</option><option>vehicle</option><option>structure</option><option>prop</option><option>plant</option></select></div></div>
+  <label>3D file</label><input type="file" id="ef" accept=".obj,.glb,.gltf,.json"><label style="margin-top:10px"><input type="checkbox" id="eas" checked> also save it as a ready-made model for this prompt (Depth 3D, locked)</label>
+  <div class="row" style="margin-top:10px"><button class="btn" onclick="addExample()">Upload &amp; teach</button></div><div id="emsg"></div><div id="elist" style="margin-top:10px"></div></div>
+  <div class="card"><h2>3. Test a prompt (costs nothing)</h2><div class="row"><input id="tp" placeholder="red gorilla boss" style="flex:1"><select id="tv"><option value="classic">Classic</option><option value="depth3d">Depth 3D</option></select><button class="btn" onclick="testPrompt()">Check</button></div><div id="tout"></div></div>`;
+  lessons();examples()}
+async function lessons(){const d=await api('/admin/api/lessons');$('#llist').innerHTML=d.items.length?`<table><tr><th>Lesson</th><th>When</th><th>Used</th><th></th></tr>${d.items.map(l=>`<tr><td style="${l.enabled?'':'opacity:.45'}">${esc(l.text)}</td><td class="mut">${esc(l.keywords||'always')}<br>${l.scope} / ${l.variant}</td><td>${l.hits}</td><td class="row"><button class="btn sec sm" onclick="togL(${l.id},${l.enabled?0:1})">${l.enabled?'Disable':'Enable'}</button><button class="btn bad sm" onclick="delL(${l.id})">Delete</button></td></tr>`).join('')}</table>`:'<p class="mut">No lessons yet.</p>'}
+async function addLesson(){try{await api('/admin/api/lessons',{method:'POST',json:{text:$('#lt').value,keywords:$('#lk').value,scope:$('#ls').value,variant:$('#lv').value}});$('#lt').value='';note($('#lmsg2'),'Lesson added.',1);lessons()}catch(e){note($('#lmsg2'),e.message)}}
+async function togL(id,v){await api('/admin/api/lessons/'+id,{method:'PATCH',json:{enabled:v}});lessons()}
+async function delL(id){await api('/admin/api/lessons/'+id,{method:'DELETE'});lessons()}
+async function examples(){const d=await api('/admin/api/examples');$('#elist').innerHTML=d.items.length?`<table><tr><th>Example</th><th>Teaches</th><th>Parts</th><th>Used</th><th></th></tr>${d.items.map(e=>`<tr><td style="${e.enabled?'':'opacity:.45'}"><b>${esc(e.name)}</b><div class="mut" style="font-size:12px">${esc(e.source_fmt)}${e.model_id?' &middot; saved as model':''}</div></td><td>${esc(e.prompt)}<br><span class="tag">${e.scope==='category'?'category: '+esc(e.category):'subject'}</span></td><td>${e.parts}</td><td>${e.uses}</td><td class="row"><button class="btn sec sm" onclick="exView('${e.id}')">View</button><button class="btn sec sm" onclick="exTog('${e.id}',${e.enabled?0:1})">${e.enabled?'Disable':'Enable'}</button><button class="btn bad sm" onclick="exDel('${e.id}')">Delete</button></td></tr>`).join('')}</table>`:'<p class="mut">No example models yet.</p>'}
+function b64(buf){let s='';const a=new Uint8Array(buf);for(let i=0;i<a.length;i+=0x8000)s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000));return btoa(s)}
+async function addExample(){const f=$('#ef').files[0];if(!f)return note($('#emsg'),'Choose a file first.');const b={name:$('#en2').value||f.name.replace(/\.[^.]+$/,''),prompt:$('#ep2').value||$('#en2').value||f.name.replace(/\.[^.]+$/,''),scope:$('#es').value,category:$('#ec').value,filename:f.name,as_model:$('#eas').checked};
+  try{if(/\.glb$/i.test(f.name))b.data_b64=b64(await f.arrayBuffer());else b.text=await f.text();$('#emsg').innerHTML='<p class="mut">Converting...</p>';const r=await api('/admin/api/examples',{method:'POST',json:b});
+    note($('#emsg'),`Taught! ${r.parts} parts (${r.format}, category ${r.category}).${r.model_id?' Saved as a locked model too.':''} ${(r.notes||[]).join(' ')}`,1);$('#ef').value='';examples()}catch(e){note($('#emsg'),e.message)}}
+async function exDel(id){if(!confirm('Delete this example? (a model saved from it stays in the Models tab)'))return;await api('/admin/api/examples/'+id,{method:'DELETE'});examples()}
+async function exTog(id,v){await api('/admin/api/examples/'+id,{method:'PATCH',json:{enabled:v}});examples()}
+async function exView(id){const e=await api('/admin/api/examples/'+id);$('#dbody').innerHTML=`<h2>${esc(e.name)}</h2><p class="mut">${e.parts} parts &middot; ${e.payload.bbox.join(' x ')} units ${e.payload.notes.length?' &middot; '+esc(e.payload.notes.join(' ')):''}</p><div class="row"><canvas id="cv1" width="340" height="300"></canvas><canvas id="cv2" width="340" height="300"></canvas></div>`;dlg.showModal();draw($('#cv1'),{hulls:e.hulls},0,1);draw($('#cv2'),{hulls:e.hulls},2,1)}
+async function testPrompt(){try{const r=await api('/admin/api/preview',{method:'POST',json:{prompt:$('#tp').value,variant:$('#tv').value}});const mt=r.match;
+  $('#tout').innerHTML=`<div class="msg">${mt.mode==='exact'?'<b>Exact match</b> - served from memory, <b>no AI call</b>.':mt.mode==='local'?'<b>Same subject, different colour/size</b> - recoloured locally, <b>no AI call</b>.':mt.mode==='variant'?'<b>Similar model found</b> ('+esc(mt.prompt)+') - the AI re-sculpts it (1 call).':'<b>New subject</b> - the AI builds it from scratch.'}<br><span class="mut">category ${esc(r.category)} &middot; words: ${esc(r.tokens.join(', '))}</span></div>
+  <p class="mut">Lessons that would be added: ${r.lessons.length} &middot; examples: ${r.examples.length}</p>${r.teaching_text?'<pre>'+esc(r.teaching_text)+'</pre>':''}`}catch(e){note($('#tout'),e.message)}}
+/* ---------- backup ---------- */
+function backup(){$('#main').innerHTML=`<div class="card"><h2>Backup &amp; restore</h2><p class="mut">The free Render plan wipes its disk on redeploys, so download a backup after teaching or whenever you want to keep the library. The file holds every model, lesson and example.</p>
+  <div class="row"><button class="btn" onclick="exportAll()">Download backup</button></div><label style="margin-top:14px">Restore from a backup file (merges; locked models are never overwritten)</label><input type="file" id="bf" accept=".json"><div class="row" style="margin-top:8px"><button class="btn sec" onclick="importAll()">Restore</button></div><div id="bmsg"></div></div>`}
+async function exportAll(){const r=await fetch('/admin/api/export',{headers:{'X-Admin-Token':TOKEN}});if(!r.ok)return note($('#bmsg'),'Export failed.');const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='verdant-memory-backup.json';a.click()}
+async function importAll(){const f=$('#bf').files[0];if(!f)return note($('#bmsg'),'Choose a backup file.');try{const j=JSON.parse(await f.text());const r=await api('/admin/api/import',{method:'POST',json:j});note($('#bmsg'),`Restored ${r.imported.models} model(s), ${r.imported.lessons} lesson(s), ${r.imported.examples} example(s).`,1)}catch(e){note($('#bmsg'),e.message)}}
+/* ---------- ai ---------- */
+async function ai(refresh){const m=$('#main');m.innerHTML='<p class="mut">Asking Google which models your key can use...</p>';let d;try{d=await api('/admin/api/ai'+(refresh?'?refresh=true':''))}catch(e){m.innerHTML='';return note(m,e.message)}
+  const g=d.gemini;m.innerHTML=`<div class="card"><h2>AI providers</h2><p>Keys found on the server: ${d.providers.map(p=>`<span class="tag g">${esc(p)}</span>`).join(' ')||'<span class="tag b">none - set GEMINI_API_KEY on Render</span>'}</p><p class="mut">Configured Gemini model: <b>${esc(d.configured_model)}</b> (use <code>auto</code>, or leave AI_MODEL unset, to always pick the best working one).</p></div>
+  ${g?(g.ok?`<div class="card"><h2>Gemini models your key can use</h2><p>The server will try, in order: ${g.will_try.map(x=>`<span class="tag g">${esc(x)}</span>`).join(' ')}</p><p class="mut">Last model that worked: ${esc(g.last_working||'-')}</p><details><summary class="mut">All ${g.all_generate_models.length} models that support text generation</summary><pre>${esc(g.all_generate_models.join('\n'))}</pre></details></div>`:`<div class="card"><div class="msg err">Gemini: ${esc(g.error)}</div></div>`):''}
+  <div class="card"><div class="row"><button class="btn sec" onclick="ai(true)">Refresh model list</button><button class="btn" onclick="aiTest()">Send a test request (1 AI call)</button></div><div id="aout"></div></div>`}
+async function aiTest(){$('#aout').innerHTML='<p class="mut">Calling the AI...</p>';const r=await api('/admin/api/ai-test',{method:'POST',json:{}});note($('#aout'),r.ok?`Works: ${r.engine.provider} / ${r.engine.model}`:r.error,r.ok)}
+if(TOKEN){api('/admin/api/overview').then(()=>{$('#login').classList.add('hide');init()}).catch(()=>logout(true))}
+</script></body></html>
